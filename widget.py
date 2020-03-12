@@ -1,15 +1,29 @@
 from tkinter import *
 from yeelight import Bulb
 
-tela = Tk()
-tela.title("Controle da Yeelight")
-tela.geometry("250x100+200+100")
+main = Tk()
+main.title("Easy Yeelight")
+main.geometry("200x300+200+100")
+
 Bulb = Bulb("192.168.15.6")
+imgOff = PhotoImage(file='img/bulb_off.png')
+imgOn = PhotoImage(file='img/bulb_on.png')
 
-on = Button (tela, text = "Ligar", width = 10, command = Bulb.turn_on)
-on.pack(side = "left", padx = 10, pady = 10)
+def bulb_on():
+    Bulb.turn_on()
+    bulbImg.configure(image=imgOn)
 
-off = Button (tela, text = "Desligar", width = 10, command = Bulb.turn_off)
-off.pack(side = "left", padx = 10, pady = 10)
+def bulb_off():
+    Bulb.turn_off()
+    bulbImg.configure(image=imgOff)
 
-tela.mainloop()
+bulbImg = Label(main, image=imgOff)
+bulbImg.pack(side="top", padx=10, pady=10)
+
+on = Button(main, text="ON", width=10, command=bulb_on)
+on.pack(side="left", padx=10, pady=10)
+
+off = Button(main, text="OFF", width=10, command=bulb_off)
+off.pack(side="right", padx=10, pady=10)
+
+main.mainloop()
