@@ -1,6 +1,9 @@
 from tkinter import Tk, PhotoImage, Label, Button
 from PIL import ImageTk, Image
 from yeelight import Bulb, discover_bulbs
+import pickle
+import sys
+import os
 
 main = Tk()
 main.title("Easy Yeelight")
@@ -13,8 +16,41 @@ imgOff = ImageTk.PhotoImage(Image.open(
 imgOn = ImageTk.PhotoImage(Image.open(
     'img/bulb_on.png').resize((60, 120), Image.ANTIALIAS))
 
-# Standard value, will be changed to "" later
-bulb = Bulb("192.168.15.2")
+
+bulb = Bulb("")
+
+
+def discoverIp():
+    infos = discover_bulbs()
+    if infos:
+        return infos[0]["ip"]
+    else:
+        return
+
+
+try:
+    saveData = open('yee.pkl', 'rb')
+    ip = pickle.load(saveData)
+    if discoverIp() == ip:
+        bulb = Bulb(ip)
+    else:
+        ip = None
+except FileNotFoundError:
+    ip = discoverIp()
+    if ip != None:
+        saveData = open('yee.pkl', 'wb')
+        pickle.dump(ip, saveData)
+        bulb = Bulb(ip)
+    else:
+        print("discover fails")
+except EOFError:
+    os.remove('yee.pkl')
+finally:
+    if ip != None:
+        saveData.close()
+    else:
+        print("system exit - try delete yee.pkl file")
+        sys.exit(0)
 
 
 def verifyState(b):
