@@ -1,4 +1,4 @@
-from tkinter import Tk, PhotoImage, Label, Button
+from tkinter import *
 from PIL import ImageTk, Image
 from yeelight import Bulb, discover_bulbs
 import pickle
@@ -7,7 +7,7 @@ import os
 
 main = Tk()
 main.title("Easy Yeelight")
-main.geometry("300x400+400+300")
+main.geometry("500x400+400+300")
 main.resizable(False, False)
 
 # Using resize method while the size is not defined.
@@ -57,6 +57,11 @@ def verifyState(b):
     return True if b.get_properties()["power"] == 'on' else False
 
 
+def ipPopulate(str):
+    ip_list.delete(0, END)
+    ip_list.insert(END, str)
+
+
 def bulb_on():
     bulb.turn_on()
     bulbImg.configure(image=imgOn)
@@ -67,9 +72,25 @@ def bulb_off():
     bulbImg.configure(image=imgOff)
 
 
-bulbImg = Label(main, image=imgOn if verifyState(bulb) else imgOff)
-on = Button(main, text="ON", width=8, command=bulb_on)
-off = Button(main, text="OFF", width=8, command=bulb_off)
+search_frame = Frame(main, bg="#696969", width=200, height=400)
+control_frame = Frame(main, width=300, height=400)
+
+ip_list = Listbox(search_frame, width=30, height=5)
+bulbImg = Label(control_frame, image=imgOn if verifyState(bulb) else imgOff)
+search_button = Button(search_frame, text="SEARCH", width=8, command= lambda: ipPopulate(discoverIp()))
+on=Button(control_frame, text="ON", width=8, command=bulb_on)
+off=Button(control_frame, text="OFF", width=8, command=bulb_off)
+
+search_frame.grid(column=0, row=0, sticky="e")
+search_frame.grid_propagate(0)
+search_frame.columnconfigure(0, minsize=100)
+search_frame.columnconfigure(1, minsize=100)
+control_frame.grid(column=1, row=0, sticky="n")
+control_frame.columnconfigure(0, minsize=150)
+control_frame.columnconfigure(1, minsize=150)
+
+search_button.grid(column=0, row=0, columnspan=2, pady=5, padx=5)
+ip_list.grid(column=0, row=1, columnspan=2, pady=5, padx=5)
 
 bulbImg.grid(column=0, row=0, columnspan=2, pady=5, padx=5)
 on.grid(column=0, row=1)
