@@ -1,4 +1,5 @@
-from tkinter import Tk, Frame, Label, Button, Listbox, END, StringVar
+from tkinter import Tk, Frame, Label, Button, Listbox, Radiobutton, messagebox, simpledialog, END, StringVar
+from tkinter.ttk import Separator
 from PIL import ImageTk, Image
 from yeelight import Bulb, discover_bulbs
 from scapy.layers.inet import IP, ICMP
@@ -7,12 +8,17 @@ from scapy.sendrecv import sr1
 import pickle
 import sys
 import os
+import re
 
 
 main = Tk()
 main.title("Easy Yeelight")
+main.iconbitmap("img/icon.ico")
 main.geometry("500x400+400+300")
 main.resizable(False, False)
+
+bg_color = "#696969"
+
 
 # Using resize method while the size is not defined.
 imgOff = ImageTk.PhotoImage(Image.open(
@@ -21,7 +27,7 @@ imgOn = ImageTk.PhotoImage(Image.open(
     'img/bulb_on.png').resize((60, 120), Image.ANTIALIAS))
 
 
-bulb = Bulb("192.168.15.2")
+#bulb = Bulb("192.168.15.2")
 
 
 def discoverIp():
@@ -35,30 +41,40 @@ def discoverIp():
         return
 
 
-def saveBulbs():
+def saveBulbs(**kwargs):
     try:
-        saveData = open('yee.pkl', 'rb')
-        ip = pickle.load(saveData)
-        if discoverIp() == ip:
-            bulb = Bulb(ip)
+        if not kwargs:
+            with (open("yee.pkl", "rb")) as data:
+                bulbPopulate(pickle.load(data))
         else:
-            ip = None
+            name = simpledialog.askstring(
+                "Add Device", "Type the name of the Bulb")
+            if name == None:
+                return
+            elif name == "" or len(name) > 20:
+                messagebox.showerror("Add Device","Invalid Name")
+                return
+            idt = {kwargs["mac"]: kwargs["ip"]}
+            newData = {}
+            try:
+                saveData = open('yee.pkl', 'rb')
+                saved = pickle.load(saveData)
+                saved[name] = idt
+                newData = saved
+                saveData = open('yee.pkl', 'wb')
+                pickle.dump(newData, saveData)
+                saveData.close()
+                bulbPopulate(newData)
+            except (FileNotFoundError, EOFError):
+                newData[name] = idt
+                saveData = open('yee.pkl', 'wb')
+                pickle.dump(newData, saveData)
+                saveData.close()
+                bulbPopulate(newData)
     except FileNotFoundError:
-        ip = discoverIp()
-        if ip != None:
-            saveData = open('yee.pkl', 'wb')
-            pickle.dump(ip, saveData)
-            bulb = Bulb(ip)
-        else:
-            print("discover fails")
+        pass
     except EOFError:
         os.remove('yee.pkl')
-    finally:
-        if ip != None:
-            saveData.close()
-        else:
-            print("system exit - try delete yee.pkl file")
-            sys.exit(0)
 
 
 def verifyState(b):
@@ -77,31 +93,75 @@ def ipPopulate(ips):
     ip_list.delete(0, END)
     if ips != None:
         for ip in ips:
-            ip_list.insert(END, ip + "   -   " + getmacbyip(ip))
+            ip_list.insert(END, ip + "  -  " + getmacbyip(ip))
+        add_button["state"] = "active"
     else:
-        ip_list.insert(END, "No lamp found")
+        ip_list.insert(END, "No devices found")
         ip_list.insert(END, "Try power on and off")
 
 
-def bulb_on():
+def addDevice():
+    sel = ip_list.curselection()
+    if sel:
+        x = re.sub(r"\s+", "", ip_list.get(sel))
+        x = x.split("-")
+        ip = x[0]
+        mac = x[1]
+        print(ip+"\n"+mac)
+        saveBulbs(mac=mac, ip=ip)
+    else:
+        messagebox.showerror("Add Device","Please, select one IP first")
+
+
+def bulbPopulate(bulbs):
+    print(bulbs)
+    i = 0
+    for b, v in bulbs.items():
+        ip = (list(v.values())[0])
+        dev_op = Radiobutton(devices_frame, text=b, bg=bg_color, width=20,
+                             activebackground=bg_color, indicatoron=0, variable="bulbsOp", value=b,
+                             command=lambda: activateBulb(ip))
+        dev_op.grid(column=0, row=i, padx=5, pady=5)
+        i += 1
+
+
+def activateBulb(ip):
+    bulb = Bulb(ip)
+    refreshState(bulb)
+    on.configure(command=lambda: bulb_on(bulb), state="active")
+    off.configure(command=lambda: bulb_off(bulb), state="active")
+
+
+def refreshState(bulb):
+    bulbImg.configure(image=imgOn if verifyState(bulb) else imgOff)
+
+
+def bulb_on(bulb):
     bulb.turn_on()
     bulbImg.configure(image=imgOn)
 
 
-def bulb_off():
+def bulb_off(bulb):
     bulb.turn_off()
     bulbImg.configure(image=imgOff)
 
 
-search_frame = Frame(main, bg="#696969", width=200, height=400)
+search_frame = Frame(main, bg=bg_color, width=200, height=400)
 control_frame = Frame(main, width=300, height=400)
+devices_frame = Frame(search_frame, bg=bg_color, width=180)
 
-ip_list = Listbox(search_frame, width=29, height=5, relief="flat")
-bulbImg = Label(control_frame, image=imgOn if verifyState(bulb) else imgOff)
+ip_list = Listbox(search_frame, width=29, height=6, relief="flat")
 search_button = Button(search_frame, text="SEARCH", width=8,
                        command=lambda: ipPopulate(discoverIp()))
-on = Button(control_frame, text="ON", width=8, command=bulb_on)
-off = Button(control_frame, text="OFF", width=8, command=bulb_off)
+add_button = Button(search_frame, text="ADD", width=8,
+                    state="disable", command=addDevice)
+sep = Separator(search_frame, orient="horizontal")
+devices_title = Label(search_frame, bg=bg_color,
+                      text="DEVICES", font=('Sans-serif', '15', 'bold'))
+
+bulbImg = Label(control_frame, image=imgOff)
+on = Button(control_frame, text="ON", width=8, state="disable")
+off = Button(control_frame, text="OFF", width=8, command=lambda: bulb_off(bulb), state="disable")
 
 search_frame.grid(column=0, row=0, sticky="e")
 search_frame.grid_propagate(0)
@@ -110,12 +170,17 @@ search_frame.columnconfigure(1, minsize=100)
 control_frame.grid(column=1, row=0, sticky="n")
 control_frame.columnconfigure(0, minsize=150)
 control_frame.columnconfigure(1, minsize=150)
+devices_frame.grid(column=0, row=4, columnspan=2, pady=10)
 
-search_button.grid(column=0, row=0, columnspan=2, pady=5, padx=5)
-ip_list.grid(column=0, row=1, columnspan=2, pady=5, padx=5)
+search_button.grid(column=0, row=0, pady=10)
+add_button.grid(column=1, row=0, pady=10)
+ip_list.grid(column=0, row=1, columnspan=2, padx=5)
+sep.grid(column=0, row=2, columnspan=2, pady=10, padx=10, sticky="ew")
+devices_title.grid(column=0, row=3, columnspan=2)
 
 bulbImg.grid(column=0, row=0, columnspan=2, pady=5, padx=5)
 on.grid(column=0, row=1)
 off.grid(column=1, row=1)
 
+saveBulbs()
 main.mainloop()
