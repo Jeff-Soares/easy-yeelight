@@ -1,7 +1,7 @@
-from tkinter import Tk, Frame, LabelFrame, Label, Button, Listbox, Radiobutton, Scale, messagebox, simpledialog, END
+from tkinter import Tk, Frame, PhotoImage, LabelFrame, Label, Button, Listbox, Radiobutton, Scale, IntVar, messagebox, simpledialog, END
 from tkinter.ttk import Separator
 from PIL import ImageTk, Image
-from yeelight import Bulb, discover_bulbs
+from yeelight import Bulb, discover_bulbs, BulbException
 from scapy.layers.inet import IP, ICMP
 from scapy.layers.l2 import ARP, getmacbyip
 from scapy.sendrecv import sr1
@@ -25,8 +25,7 @@ imgOff = ImageTk.PhotoImage(Image.open(
     'img/bulb_off.png').resize((60, 120), Image.ANTIALIAS))
 imgOn = ImageTk.PhotoImage(Image.open(
     'img/bulb_on.png').resize((60, 120), Image.ANTIALIAS))
-imgRgb = ImageTk.PhotoImage(Image.open(
-    'img/rgb_scale.png').resize((250, 10), Image.ANTIALIAS))
+imgRgb = PhotoImage(file='img/hsv_bar.png')
 
 
 def discoverIp():
@@ -127,11 +126,32 @@ def bulbPopulate(bulbs):
 
 
 def activateBulb(b):
-    refreshImgState(b)
-    on.configure(command=lambda: bulb_on(b), state="active")
-    off.configure(command=lambda: bulb_off(b), state="active")
-    ip_label.configure(text=b._ip)
-    model_label.configure(text=re.sub(r"BulbType\.", "", str(b.bulb_type)))
+    try:
+        refreshImgState(b)
+        on.configure(command=lambda: bulb_on(b), state="active")
+        off.configure(command=lambda: bulb_off(b), state="active")
+        brightness.configure(state="active")
+        temp.configure(state="active")
+        color.configure(state="active")
+        brightness.bind("<ButtonRelease-1>", lambda event,
+                        b=b: change_brightness(event, b))
+        temp.bind("<ButtonRelease-1>", lambda event,
+                  b=b: change_temp(event, b))
+        color.bind("<ButtonRelease-1>", lambda event,
+                   b=b: change_color(event, b))
+        ip_label.configure(text=b._ip)
+        model_label.configure(text=re.sub(r"BulbType\.", "", str(b.bulb_type)))
+    except BulbException:
+        messagebox.showerror(
+            "Client requests exceeded", "You sent too many commands, wait a few minutes now.")
+        on.configure(state="disable")
+        off.configure(state="disable")
+        brightness.configure(state="disable")
+        temp.configure(state="disable")
+        color.configure(state="disable")
+        temp.unbind("<ButtonRelease-1>")
+        temp.unbind("<ButtonRelease-1>")
+        color.unbind("<ButtonRelease-1>")
 
 
 def refreshImgState(b):
@@ -146,6 +166,18 @@ def bulb_on(b):
 def bulb_off(b):
     b.turn_off()
     bulbImg.configure(image=imgOff)
+
+
+def change_brightness(event, b):
+    b.set_brightness(brightness.get())
+
+
+def change_temp(event, b):
+    b.set_color_temp(temp.get())
+
+
+def change_color(event, b):
+    b.set_hsv(color.get(), 100)
 
 
 search_frame = Frame(main, bg=bg_color, width=200, height=400)
@@ -171,12 +203,12 @@ bulbImg = Label(control_frame, image=imgOff)
 on = Button(control_frame, text="ON", width=6, state="disable")
 off = Button(control_frame, text="OFF", width=6, state="disable")
 delete = Button(control_frame, text="Delete", width=6, state="disable")
-brightness = Scale(control_frame, label="Brightness",
-                   orient="horizontal", length=250, from_=1.0, to=100)
-temp = Scale(control_frame, label="Temp", orient="horizontal",
-             length=250, from_=1700, to=6500)
-color = Scale(control_frame, label="Color",
-              orient="horizontal", length=250, showvalue=0)
+brightness = Scale(control_frame, label="Brightness", repeatinterval=10, repeatdelay=150,
+                   orient="horizontal", length=250, from_=1.0, to=100, sliderlength=20, state="disable")
+temp = Scale(control_frame, label="Temp", orient="horizontal", resolution=100,
+             length=250, from_=1700, to=6500, sliderlength=20, state="disable")
+color = Scale(control_frame, label="Color", sliderlength=20, from_=0, to=320,
+              orient="horizontal", length=250, showvalue=0, state="disable")
 rgb_scale = Label(control_frame, image=imgRgb)
 
 search_frame.grid(column=0, row=0, sticky="e")
@@ -204,7 +236,7 @@ ip_info_label.grid(column=0, row=0)
 ip_label.grid(column=1, row=0)
 model_info_label.grid(column=2, row=0)
 model_label.grid(column=3, row=0)
-bulbImg.grid(column=0, row=1, rowspan=3, pady=5, padx=5)
+bulbImg.grid(column=0, row=1, rowspan=3, pady=15, padx=5)
 on.grid(column=1, row=1)
 off.grid(column=1, row=2)
 delete.grid(column=1, row=3)
