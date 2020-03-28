@@ -1,4 +1,5 @@
-from tkinter import Tk, Frame, PhotoImage, LabelFrame, Label, Button, Listbox, Radiobutton, Scale, IntVar, messagebox, simpledialog, END
+from tkinter import (Tk, Frame, PhotoImage, LabelFrame, Label, Button, Listbox,
+                     Radiobutton, Scale, colorchooser, messagebox, simpledialog, END)
 from tkinter.ttk import Separator
 from PIL import ImageTk, Image
 from yeelight import Bulb, discover_bulbs, BulbException
@@ -74,6 +75,17 @@ def saveBulbs(**kwargs):
         os.remove('yee.pkl')
 
 
+def deleteDevice(name):
+    op = messagebox.askyesno("Delete device", "Are you sure you want to delete: "+name)
+    if op:
+        with (open('yee.pkl', 'rb')) as saveData:
+            newData = pickle.load(saveData)
+            del newData[name]
+            with (open('yee.pkl', 'wb')) as saveData:
+                pickle.dump(newData, saveData)
+        bulbPopulate(newData)
+
+
 def verifyState(b):
     return True if b.get_properties()["power"] == 'on' else False
 
@@ -114,22 +126,27 @@ def addDevice():
 
 
 def bulbPopulate(bulbs):
+    if len(devices_frame.children) > 0:
+        for widgets in devices_frame.winfo_children():
+            widgets.destroy()
     i = 0
-    for b, v in bulbs.items():
+    for name, v in bulbs.items():
         ip = (list(v.values())[0])
         bulb = Bulb(ip)
-        dev_op = Radiobutton(devices_frame, text=b, bg=bg_color, width=20,
-                             activebackground=bg_color, indicatoron=0, variable="bulbsOp", value=b,
-                             command=lambda: activateBulb(bulb))
+        dev_op = Radiobutton(devices_frame, text=name, bg=bg_color, width=20,
+                             activebackground=bg_color, indicatoron=0, variable="bulbsOp", value=name,
+                             command=lambda name=name, bulb=bulb: activateBulb(name, bulb))
         dev_op.grid(column=0, row=i, padx=5, pady=5)
         i += 1
 
 
-def activateBulb(b):
+def activateBulb(name, b):
     try:
         refreshImgState(b)
         on.configure(command=lambda: bulb_on(b), state="active")
         off.configure(command=lambda: bulb_off(b), state="active")
+        rgb.configure(command=lambda: change_color_RGB(b), state="active")
+        delete.configure(command=lambda: deleteDevice(name), state="active")
         brightness.configure(state="active")
         temp.configure(state="active")
         color.configure(state="active")
@@ -146,6 +163,7 @@ def activateBulb(b):
             "Client requests exceeded", "You sent too many commands, wait a few minutes now.")
         on.configure(state="disable")
         off.configure(state="disable")
+        rgb.configure(state="disable")
         brightness.configure(state="disable")
         temp.configure(state="disable")
         color.configure(state="disable")
@@ -180,6 +198,15 @@ def change_color(event, b):
     b.set_hsv(color.get(), 100)
 
 
+def change_color_RGB(b):
+    result = colorchooser.askcolor("#0000FF")[0]
+    if result:
+        red = int(result[0])
+        green = int(result[1])
+        blue = int(result[2])
+        b.set_rgb(red, green, blue)
+
+
 search_frame = Frame(main, bg=bg_color, width=200, height=400)
 control_frame = Frame(main, width=300, height=400)
 devices_frame = Frame(search_frame, bg=bg_color, width=180)
@@ -202,6 +229,7 @@ model_label = Label(info_lframe, text="")
 bulbImg = Label(control_frame, image=imgOff)
 on = Button(control_frame, text="ON", width=6, state="disable")
 off = Button(control_frame, text="OFF", width=6, state="disable")
+rgb = Button(control_frame, text="RGB", width=6, state="disable")
 delete = Button(control_frame, text="Delete", width=6, state="disable")
 brightness = Scale(control_frame, label="Brightness", repeatinterval=10, repeatdelay=150,
                    orient="horizontal", length=250, from_=1.0, to=100, sliderlength=20, state="disable")
@@ -236,14 +264,15 @@ ip_info_label.grid(column=0, row=0)
 ip_label.grid(column=1, row=0)
 model_info_label.grid(column=2, row=0)
 model_label.grid(column=3, row=0)
-bulbImg.grid(column=0, row=1, rowspan=3, pady=15, padx=5)
+bulbImg.grid(column=0, row=1, rowspan=4, pady=15, padx=5)
 on.grid(column=1, row=1)
 off.grid(column=1, row=2)
-delete.grid(column=1, row=3)
-brightness.grid(column=0, row=4, columnspan=4)
-temp.grid(column=0, row=5, columnspan=4)
-color.grid(column=0, row=6, columnspan=4)
-rgb_scale.grid(column=0, row=7, columnspan=4)
+rgb.grid(column=1, row=3)
+delete.grid(column=1, row=4)
+brightness.grid(column=0, row=5, columnspan=4)
+temp.grid(column=0, row=6, columnspan=4)
+color.grid(column=0, row=7, columnspan=4)
+rgb_scale.grid(column=0, row=8, columnspan=4)
 
 saveBulbs()
 main.mainloop()
