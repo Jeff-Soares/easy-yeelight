@@ -1,7 +1,6 @@
 from tkinter import (Tk, Frame, PhotoImage, LabelFrame, Label, Button, Listbox,
-                     Radiobutton, Scale, colorchooser, messagebox, simpledialog, END)
+                     Radiobutton, Scale, colorchooser, messagebox, simpledialog, IntVar, END)
 from tkinter.ttk import Separator
-from PIL import ImageTk, Image
 from yeelight import Bulb, discover_bulbs, BulbException
 from scapy.layers.inet import IP, ICMP
 from scapy.layers.l2 import ARP, getmacbyip
@@ -19,13 +18,8 @@ main.geometry("500x400+400+300")
 main.resizable(False, False)
 
 bg_color = "#696969"
-
-
-# Using resize method while the size is not defined.
-imgOff = ImageTk.PhotoImage(Image.open(
-    'img/bulb_off.png').resize((60, 120), Image.ANTIALIAS))
-imgOn = ImageTk.PhotoImage(Image.open(
-    'img/bulb_on.png').resize((60, 120), Image.ANTIALIAS))
+imgOff = PhotoImage(file='img/bulb_off.png')
+imgOn = PhotoImage(file='img/bulb_on.png')
 imgRgb = PhotoImage(file='img/hsv_bar.png')
 
 
@@ -41,38 +35,51 @@ def discoverIp():
         return None
 
 
-def saveBulbs(**kwargs):
+def startSavedDevices():
     try:
-        if not kwargs:
-            with (open("yee.pkl", "rb")) as data:
-                bulbPopulate(pickle.load(data))
-        else:
-            name = simpledialog.askstring(
-                "Add Device", "Type the name of the Bulb")
-            if name == None:
-                return
-            elif name == "" or len(name) > 20:
-                messagebox.showerror("Add Device", "Invalid Name")
-                return
-            idt = {kwargs["id"]: kwargs["ip"]}
-            newData = {}
-            try:
-                with (open('yee.pkl', 'rb')) as saveData:
-                    saved = pickle.load(saveData)
-                    saved[name] = idt
-                    newData = saved
-                with (open('yee.pkl', 'wb')) as saveData:
-                    pickle.dump(newData, saveData)
-                bulbPopulate(newData)
-            except (FileNotFoundError, EOFError):
-                newData[name] = idt
-                with (open('yee.pkl', 'wb')) as saveData:
-                    pickle.dump(newData, saveData)
-                bulbPopulate(newData)
+        with (open("yee.pkl", "rb")) as data:
+            bulbPopulate(pickle.load(data))
     except FileNotFoundError:
-        pass
+        return
     except EOFError:
         os.remove('yee.pkl')
+
+
+def addDevice():
+    sel = ip_list.curselection()
+    if sel:
+        x = re.sub(r"\s+", "", ip_list.get(sel))
+        x = x.split("-")
+        ip = x[0]
+        id = x[1]
+        saveDevice(id=id, ip=ip)
+    else:
+        messagebox.showerror("Add Device", "Please, select one IP first")
+
+
+def saveDevice(id ,ip):
+    file = "yee.pkl"
+    idt = {id:ip}
+    name = simpledialog.askstring("Add Device", "Type the name of the Bulb")
+    if name == None:
+        return
+    elif name == "" or len(name) > 20:
+        messagebox.showerror("Add Device", "Invalid Name")
+        return
+    try:
+        with (open(file, 'rb')) as savedData:
+            data = pickle.load(savedData)
+            data[name] = idt
+            with (open(file, 'wb')) as savedData:
+                pickle.dump(data, savedData)
+            bulbPopulate(data)
+    except FileNotFoundError:
+        newData = {name:idt}
+        with (open(file, 'wb')) as savedData:
+            pickle.dump(newData, savedData)
+        bulbPopulate(newData)
+    except EOFError:
+        os.remove(file)
 
 
 def deleteDevice(name):
@@ -83,11 +90,8 @@ def deleteDevice(name):
             del newData[name]
             with (open('yee.pkl', 'wb')) as saveData:
                 pickle.dump(newData, saveData)
+        disableControls()
         bulbPopulate(newData)
-
-
-def verifyState(b):
-    return True if b.get_properties()["power"] == 'on' else False
 
 
 def ipConfirm(ip):
@@ -113,18 +117,6 @@ def ipPopulate(devs):
         ip_list.insert(END, "Or restart local network")
 
 
-def addDevice():
-    sel = ip_list.curselection()
-    if sel:
-        x = re.sub(r"\s+", "", ip_list.get(sel))
-        x = x.split("-")
-        ip = x[0]
-        id = x[1]
-        saveBulbs(id=id, ip=ip)
-    else:
-        messagebox.showerror("Add Device", "Please, select one IP first")
-
-
 def bulbPopulate(bulbs):
     if len(devices_frame.children) > 0:
         for widgets in devices_frame.winfo_children():
@@ -136,13 +128,13 @@ def bulbPopulate(bulbs):
         dev_op = Radiobutton(devices_frame, text=name, bg=bg_color, width=20,
                              activebackground=bg_color, indicatoron=0, variable="bulbsOp", value=name,
                              command=lambda name=name, bulb=bulb: activateBulb(name, bulb))
-        dev_op.grid(column=0, row=i, padx=5, pady=5)
+        dev_op.grid(column=0, row=i, padx=2, pady=2)
         i += 1
 
 
 def activateBulb(name, b):
     try:
-        refreshImgState(b)
+        refreshState(b)
         on.configure(command=lambda: bulb_on(b), state="active")
         off.configure(command=lambda: bulb_off(b), state="active")
         rgb.configure(command=lambda: change_color_RGB(b), state="active")
@@ -160,20 +152,16 @@ def activateBulb(name, b):
         model_label.configure(text=re.sub(r"BulbType\.", "", str(b.bulb_type)))
     except BulbException:
         messagebox.showerror(
-            "Client requests exceeded", "You sent too many commands, wait a few minutes now.")
-        on.configure(state="disable")
-        off.configure(state="disable")
-        rgb.configure(state="disable")
-        brightness.configure(state="disable")
-        temp.configure(state="disable")
-        color.configure(state="disable")
-        temp.unbind("<ButtonRelease-1>")
-        temp.unbind("<ButtonRelease-1>")
-        color.unbind("<ButtonRelease-1>")
+            "Conection error", "A socket error has occurred or you have sent too many commands and exceeded the limit")
+        disableControls()
 
 
-def refreshImgState(b):
-    bulbImg.configure(image=imgOn if verifyState(b) else imgOff)
+def refreshState(b):
+    state = b.get_properties()
+    bulbImg.configure(image=imgOn if state["power"] == "on" else imgOff)
+    brightnessInt.set(state["bright"])
+    tempInt.set(state["ct"])
+    colorInt.set(state["hue"])
 
 
 def bulb_on(b):
@@ -199,12 +187,25 @@ def change_color(event, b):
 
 
 def change_color_RGB(b):
-    result = colorchooser.askcolor("#0000FF")[0]
+    currentColor = hex(int(b.get_properties()["rgb"])).split("x")[-1].zfill(6)
+    result = colorchooser.askcolor("#"+currentColor)[0]
     if result:
         red = int(result[0])
         green = int(result[1])
         blue = int(result[2])
         b.set_rgb(red, green, blue)
+
+def disableControls():
+    on.configure(state="disable")
+    off.configure(state="disable")
+    rgb.configure(state="disable")
+    delete.configure(state="disable")
+    brightness.configure(state="disable")
+    temp.configure(state="disable")
+    color.configure(state="disable")
+    temp.unbind("<ButtonRelease-1>")
+    temp.unbind("<ButtonRelease-1>")
+    color.unbind("<ButtonRelease-1>")
 
 
 search_frame = Frame(main, bg=bg_color, width=200, height=400)
@@ -231,11 +232,14 @@ on = Button(control_frame, text="ON", width=6, state="disable")
 off = Button(control_frame, text="OFF", width=6, state="disable")
 rgb = Button(control_frame, text="RGB", width=6, state="disable")
 delete = Button(control_frame, text="Delete", width=6, state="disable")
-brightness = Scale(control_frame, label="Brightness", repeatinterval=10, repeatdelay=150,
+brightnessInt = IntVar()
+brightness = Scale(control_frame, label="Brightness", variable=brightnessInt, repeatinterval=10, repeatdelay=150,
                    orient="horizontal", length=250, from_=1.0, to=100, sliderlength=20, state="disable")
-temp = Scale(control_frame, label="Temp", orient="horizontal", resolution=100,
+tempInt = IntVar()
+temp = Scale(control_frame, label="Temp", variable=tempInt, orient="horizontal", resolution=100,
              length=250, from_=1700, to=6500, sliderlength=20, state="disable")
-color = Scale(control_frame, label="Color", sliderlength=20, from_=0, to=320,
+colorInt = IntVar()
+color = Scale(control_frame, label="Color", variable=colorInt, sliderlength=20, from_=0, to=360,
               orient="horizontal", length=250, showvalue=0, state="disable")
 rgb_scale = Label(control_frame, image=imgRgb)
 
@@ -274,5 +278,6 @@ temp.grid(column=0, row=6, columnspan=4)
 color.grid(column=0, row=7, columnspan=4)
 rgb_scale.grid(column=0, row=8, columnspan=4)
 
-saveBulbs()
+
+startSavedDevices()
 main.mainloop()
