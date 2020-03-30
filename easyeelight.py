@@ -97,6 +97,7 @@ def deleteDevice(name):
             with (open('yee.pkl', 'wb')) as saveData:
                 pickle.dump(newData, saveData)
         disableControls()
+        bulbsOp.set("")
         bulbPopulate(newData)
 
 
@@ -212,14 +213,12 @@ def disableControls():
     on.configure(state="disable")
     off.configure(state="disable")
     rgb.configure(state="disable")
-    delete.configure(state="disable")
     brightness.configure(state="disable")
     temp.configure(state="disable")
     color.configure(state="disable")
-    temp.unbind("<ButtonRelease-1>")
+    brightness.unbind("<ButtonRelease-1>")
     temp.unbind("<ButtonRelease-1>")
     color.unbind("<ButtonRelease-1>")
-    bulbsOp.set("")
 
 
 search_frame = Frame(main, bg=bg_color, width=200, height=400)
