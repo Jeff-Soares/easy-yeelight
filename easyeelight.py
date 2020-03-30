@@ -1,5 +1,5 @@
 from tkinter import (Tk, Frame, PhotoImage, LabelFrame, Label, Button, Listbox,
-                     Radiobutton, Scale, colorchooser, messagebox, simpledialog, IntVar, END)
+                     Radiobutton, Scale, colorchooser, messagebox, simpledialog, StringVar, IntVar, END)
 from tkinter.ttk import Separator
 from yeelight import Bulb, discover_bulbs, BulbException
 from scapy.layers.inet import IP, ICMP
@@ -21,6 +21,7 @@ bg_color = "#696969"
 imgOff = PhotoImage(file='img/bulb_off.png')
 imgOn = PhotoImage(file='img/bulb_on.png')
 imgRgb = PhotoImage(file='img/hsv_bar.png')
+bulbsOp = StringVar()
 
 
 def discoverIp():
@@ -57,9 +58,9 @@ def addDevice():
         messagebox.showerror("Add Device", "Please, select one IP first")
 
 
-def saveDevice(id ,ip):
+def saveDevice(id, ip):
     file = "yee.pkl"
-    idt = {id:ip}
+    idt = {id: ip}
     name = simpledialog.askstring("Add Device", "Type the name of the Bulb")
     if name == None:
         return
@@ -69,12 +70,16 @@ def saveDevice(id ,ip):
     try:
         with (open(file, 'rb')) as savedData:
             data = pickle.load(savedData)
+            for v in data.values():
+                if v == idt:
+                    messagebox.showerror("Add Device", "This device is already registred.")
+                    return
             data[name] = idt
             with (open(file, 'wb')) as savedData:
                 pickle.dump(data, savedData)
             bulbPopulate(data)
     except FileNotFoundError:
-        newData = {name:idt}
+        newData = {name: idt}
         with (open(file, 'wb')) as savedData:
             pickle.dump(newData, savedData)
         bulbPopulate(newData)
@@ -83,7 +88,8 @@ def saveDevice(id ,ip):
 
 
 def deleteDevice(name):
-    op = messagebox.askyesno("Delete device", "Are you sure you want to delete: "+name)
+    op = messagebox.askyesno(
+        "Delete device", "Are you sure you want to delete: "+name)
     if op:
         with (open('yee.pkl', 'rb')) as saveData:
             newData = pickle.load(saveData)
@@ -125,43 +131,48 @@ def bulbPopulate(bulbs):
     for name, v in bulbs.items():
         ip = (list(v.values())[0])
         bulb = Bulb(ip)
-        dev_op = Radiobutton(devices_frame, text=name, bg=bg_color, width=20,
-                             activebackground=bg_color, indicatoron=0, variable="bulbsOp", value=name,
+        dev_op = Radiobutton(devices_frame, text=name, bg=bg_color, selectcolor=bg_color,
+                             width=20, offrelief="flat", overrelief="ridge", indicatoron=0,
+                             variable=bulbsOp, value=name,
                              command=lambda name=name, bulb=bulb: activateBulb(name, bulb))
-        dev_op.grid(column=0, row=i, padx=2, pady=2)
+        dev_op.grid(column=0, row=i, pady=1)
         i += 1
 
 
 def activateBulb(name, b):
-    try:
-        refreshState(b)
-        on.configure(command=lambda: bulb_on(b), state="active")
-        off.configure(command=lambda: bulb_off(b), state="active")
-        rgb.configure(command=lambda: change_color_RGB(b), state="active")
-        delete.configure(command=lambda: deleteDevice(name), state="active")
-        brightness.configure(state="active")
-        temp.configure(state="active")
-        color.configure(state="active")
-        brightness.bind("<ButtonRelease-1>", lambda event,
-                        b=b: change_brightness(event, b))
-        temp.bind("<ButtonRelease-1>", lambda event,
-                  b=b: change_temp(event, b))
-        color.bind("<ButtonRelease-1>", lambda event,
-                   b=b: change_color(event, b))
-        ip_label.configure(text=b._ip)
-        model_label.configure(text=re.sub(r"BulbType\.", "", str(b.bulb_type)))
-    except BulbException:
-        messagebox.showerror(
-            "Conection error", "A socket error has occurred or you have sent too many commands and exceeded the limit")
-        disableControls()
+    on.configure(command=lambda: bulb_on(b), state="active")
+    off.configure(command=lambda: bulb_off(b), state="active")
+    rgb.configure(command=lambda: change_color_RGB(b), state="active")
+    delete.configure(
+        command=lambda: deleteDevice(name), state="active")
+    brightness.configure(state="active")
+    temp.configure(state="active")
+    color.configure(state="active")
+    brightness.bind("<ButtonRelease-1>", lambda event,
+                    b=b: change_brightness(event, b))
+    temp.bind("<ButtonRelease-1>", lambda event,
+              b=b: change_temp(event, b))
+    color.bind("<ButtonRelease-1>", lambda event,
+               b=b: change_color(event, b))
+    ip_label.configure(text=b._ip)
+    model_label.configure(text=re.sub(r"BulbType\.", "", str(b.bulb_type)))
+    refreshState(b)
 
 
 def refreshState(b):
-    state = b.get_properties()
-    bulbImg.configure(image=imgOn if state["power"] == "on" else imgOff)
-    brightnessInt.set(state["bright"])
-    tempInt.set(state["ct"])
-    colorInt.set(state["hue"])
+    try:
+        state = b.get_properties(["power", "bright", "ct", "hue"])
+        bulbImg.configure(image=imgOn if state["power"] == "on" else imgOff)
+        brightnessInt.set(state["bright"])
+        tempInt.set(state["ct"])
+        colorInt.set(state["hue"])
+    except BulbException:
+        if not ipConfirm(b._ip):
+            messagebox.showerror("Conection error", "IP: "+b._ip+" is not responding. Make sure the lamp is on.")
+        else:
+            messagebox.showerror(
+                "Socket error", "A socket error has occurred or you have sent too many commands and exceeded the limit")
+        disableControls()
 
 
 def bulb_on(b):
@@ -187,13 +198,15 @@ def change_color(event, b):
 
 
 def change_color_RGB(b):
-    currentColor = hex(int(b.get_properties()["rgb"])).split("x")[-1].zfill(6)
+    currentColor = hex(int(b.get_properties(["rgb"])[
+                       "rgb"])).split("x")[-1].zfill(6)
     result = colorchooser.askcolor("#"+currentColor)[0]
     if result:
         red = int(result[0])
         green = int(result[1])
         blue = int(result[2])
         b.set_rgb(red, green, blue)
+
 
 def disableControls():
     on.configure(state="disable")
@@ -206,6 +219,7 @@ def disableControls():
     temp.unbind("<ButtonRelease-1>")
     temp.unbind("<ButtonRelease-1>")
     color.unbind("<ButtonRelease-1>")
+    bulbsOp.set("")
 
 
 search_frame = Frame(main, bg=bg_color, width=200, height=400)
