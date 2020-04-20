@@ -1,6 +1,6 @@
-from tkinter import (Tk, Frame, PhotoImage, LabelFrame, Label, Button, Listbox,
+from tkinter import (Tk, Frame, PhotoImage, LabelFrame, Label, Button, Listbox, Canvas,
                      Radiobutton, Scale, colorchooser, messagebox, simpledialog, StringVar, IntVar, END)
-from tkinter.ttk import Separator
+from tkinter.ttk import Separator, Scrollbar, Style
 from yeelight import Bulb, discover_bulbs, BulbException
 from scapy.layers.inet import IP, ICMP
 from scapy.layers.l2 import ARP, getmacbyip
@@ -72,7 +72,8 @@ def saveDevice(id, ip):
             data = pickle.load(savedData)
             for v in data.values():
                 if v == idt:
-                    messagebox.showerror("Add Device", "This device is already registred.")
+                    messagebox.showerror(
+                        "Add Device", "This device is already registred.")
                     return
             data[name] = idt
             with (open(file, 'wb')) as savedData:
@@ -125,16 +126,16 @@ def ipPopulate(devs):
 
 
 def bulbPopulate(bulbs):
-    if len(devices_frame.children) > 0:
-        for widgets in devices_frame.winfo_children():
+    if len(devices.children) > 0:
+        for widgets in devices.winfo_children():
             widgets.destroy()
     i = 0
     for name, v in bulbs.items():
         ip = (list(v.values())[0])
         bulb = Bulb(ip)
-        dev_op = Radiobutton(devices_frame, text=name, bg=bg_color, selectcolor=bg_color,
-                             width=20, offrelief="flat", overrelief="ridge", indicatoron=0,
-                             variable=bulbsOp, value=name,
+        dev_op = Radiobutton(devices, text=name, bg=bg_color, selectcolor=bg_color,
+                             width=24, offrelief="flat", overrelief="ridge", indicatoron=0,
+                             variable=bulbsOp, value=name, padx=1,
                              command=lambda name=name, bulb=bulb: activateBulb(name, bulb))
         dev_op.grid(column=0, row=i, pady=1)
         i += 1
@@ -169,7 +170,8 @@ def refreshState(b):
         colorInt.set(state["hue"])
     except BulbException:
         if not ipConfirm(b._ip):
-            messagebox.showerror("Conection error", "IP: "+b._ip+" is not responding. Make sure the lamp is on.")
+            messagebox.showerror(
+                "Conection error", "IP: "+b._ip+" is not responding. Make sure the lamp is on.")
         else:
             messagebox.showerror(
                 "Socket error", "A socket error has occurred or you have sent too many commands and exceeded the limit")
@@ -224,6 +226,19 @@ def disableControls():
 search_frame = Frame(main, bg=bg_color, width=200, height=400)
 control_frame = Frame(main, width=300, height=400)
 devices_frame = Frame(search_frame, bg=bg_color, width=180)
+devices_canvas = Canvas(devices_frame, bg=bg_color, bd=0, highlightthickness=0, width=180, height=188)
+s = Style()
+s.configure('Vertical.TScrollbar', background="green")
+devices_scrollbar = Scrollbar(devices_frame, style="Vertical.TScrollbar", orient="vertical", command=devices_canvas.yview)
+devices = Frame(devices_canvas, bg=bg_color, width=160)
+devices.bind(
+    "<Configure>",
+    lambda e: devices_canvas.configure(
+        scrollregion=devices_canvas.bbox("all")
+    )
+)
+devices_canvas.create_window((0,0), window=devices, anchor="nw")
+devices_canvas.configure(yscrollcommand=devices_scrollbar.set)
 
 search_button = Button(search_frame, text="SEARCH", width=8,
                        command=lambda: ipPopulate(discoverIp()))
@@ -264,6 +279,8 @@ control_frame.grid(column=1, row=0, sticky="n")
 control_frame.columnconfigure(0, minsize=150)
 control_frame.columnconfigure(1, minsize=150)
 devices_frame.grid(column=0, row=4, columnspan=2, pady=10)
+devices_canvas.pack(side="left", fill="both", expand=True)
+devices_scrollbar.pack(side="right", fill="y")
 
 search_button.grid(column=0, row=0, pady=10)
 add_button.grid(column=1, row=0, pady=10)
